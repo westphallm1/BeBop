@@ -25,3 +25,10 @@ void getTFminiData(int* distance, int* strength) {
     }
   }
 }
+
+void getLidarDistance(int * distance, int * strength){
+  *distance = 0;
+  while(!*distance){
+    getTFminiData(distance, strength);
+  }
+}
