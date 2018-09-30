@@ -1,27 +1,27 @@
 #include <Arduino.h>
 
-/*
- * getTFminiData: https://github.com/TFmini/TFmini-Arduino
- */
-
 #include <Servo.h>
 #include <math.h>
 #include "TFmini.h"
+#include "LightCtl.h"
 
 #define MOVE_LIDAR
+#define LIDAR_THETA_OFFSET 60
+#define LASER_THETA_OFFSET 180
 #define LIDAR_OFFSET 10*2.54 //cm
-#define MAX_LIDAR_DISTANCE 70 //cm
-#define LIDAR_PIN 2 //pin for lidar servo
-#define LASER_PIN 3 //pin for laser servo
+#define MAX_LIDAR_DISTANCE 120 //cm
+#define LIDAR_PIN 5 //pin for lidar servo
+#define LASER_PIN 6 //pin for laser servo
+#define LASER_LIGHT_PIN 7
 
 #ifdef MOVE_LIDAR
-#define LIDAR_MIN 30
+#define LIDAR_MIN 60
 #define NREADINGS 5
 #else
 #define LIDAR_MIN 90
 #define NREADINGS 10
 #endif /* MOVE_LIDAR */
-#define LIDAR_MAX 150
+#define LIDAR_MAX 120
 
 
 Servo laser_servo;
@@ -34,6 +34,7 @@ int rad2deg(float radians){
 float deg2rad(int deg){
   return (deg * M_PI/180.0);
 }
+
 //use law of cosines to calculate laser angle
 int getLaserAngle(float lidardist, float lidaroffset, float lidarangle){
   int lidar_dist_sq = lidardist*lidardist;
@@ -66,6 +67,8 @@ void setup() {
   Serial.begin(115200);
   laser_servo.attach(LASER_PIN);
   lidar_servo.attach(LIDAR_PIN);
+  pinMode(LASER_LIGHT_PIN,OUTPUT);
+  lightctl_setup();
   //move the lidar to its initial position
   lidar_theta = LIDAR_MIN;
   lidar_step = 1;
@@ -85,14 +88,16 @@ void pointLaser(){
   int laser_theta = getLaserAngle(IN_DIST, LIDAR_OFFSET, lidar_mean_theta);
   Serial.print("FIRING LASER AT ANGLE ");
   Serial.println(laser_theta);
+  Serial.println();
   laser_servo.write(laser_theta);
+  digitalWrite(LASER_LIGHT_PIN,HIGH);
   delay(1000);
+  digitalWrite(LASER_LIGHT_PIN,LOW);
 }
 
 void loop() {
   int distance = 0;
   int strength = 0;
-  int laser_theta = 0;
   ctr++;
   getLidarDistance(&distance,&strength);
 #ifdef MOVE_LIDAR
@@ -101,19 +106,22 @@ void loop() {
  */
 
   lidar_theta += lidar_step;
-  lidar_servo.write(lidar_theta);
+  lidar_servo.write(lidar_theta - LIDAR_THETA_OFFSET);
   sweep_done = (lidar_step > 0 && lidar_theta >= LIDAR_MAX) ||
                (lidar_step < 0 && lidar_theta <= LIDAR_MIN);
 
   if(sweep_done){
-    lidar_step *= -1;
-  }
-
-  if (distance <= 0){
-    Serial.print("BAD ANGLE");
+    lidar_theta = LIDAR_MIN;
+    IN_OBJECT = 0;
     return;
   }
 
+  if (distance <= 0){
+    return;
+  }
+
+  light_ctl(distance);
+  delay(20);
   if(!IN_OBJECT && distance < MAX_LIDAR_DISTANCE){
     IN_OBJECT = 1;
     Serial.print("ENTERING OBJECT at ");
@@ -133,6 +141,7 @@ void loop() {
   }
 
 #else
+  int laser_theta = 0;
 /* 1D case: find the distance of an object and point at it */
   if(distance > MAX_LIDAR_DISTANCE || distance <= 0){
     return;

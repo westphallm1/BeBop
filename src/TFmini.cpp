@@ -1,5 +1,9 @@
 #include <Arduino.h>
 
+/*
+ * getTFminiData: https://github.com/TFmini/TFmini-Arduino
+ */
+
 void getTFminiData(int* distance, int* strength) {
   static char i = 0;
   char j = 0;
